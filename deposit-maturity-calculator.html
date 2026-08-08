@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0E1A2B">
+<title>예적금 만기 정산기</title>
+<style>
+:root{
+  --ink:#0E1A2B;
+  --ink-soft:#4A5A70;
+  --paper:#E7ECF2;
+  --surface:#FFFFFF;
+  --line:#CBD5E1;
+  --tier1:#1B4F7E;
+  --tier2:#6D4CA8;
+  --tax:#A8324A;
+  --gain:#12735A;
+  --shadow:0 1px 0 rgba(14,26,43,.06), 0 8px 24px -14px rgba(14,26,43,.35);
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Roboto Mono",Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR","Malgun Gothic",sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{font-family:var(--sans);background:var(--paper);color:var(--ink);font-size:15px;line-height:1.5;padding-bottom:96px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+
+.top{background:var(--ink);color:#fff;padding:calc(env(safe-area-inset-top) + 20px) 18px 22px;border-radius:0 0 20px 20px}
+.eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#7E93AD;margin:0 0 10px}
+.total-label{font-size:13px;color:#9DB0C7;margin:0}
+.total{font-size:38px;font-weight:700;margin:2px 0 0;display:flex;align-items:baseline;gap:4px}
+.total .won{font-size:18px;font-weight:500;color:#9DB0C7}
+.breakdown{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(255,255,255,.14);border-radius:12px;overflow:hidden;margin-top:18px}
+.bd{background:var(--ink);padding:11px 12px}
+.bd dt{font-size:11px;color:#8FA3BC;margin:0 0 3px}
+.bd dd{margin:0;font-size:15px;font-weight:600}
+.bd.tax dd{color:#F19FB0}
+.bd.gain dd{color:#7BD9B8}
+
+.tabs{display:flex;gap:6px;padding:16px 14px 4px}
+.tab{flex:1;border:1px solid var(--line);background:transparent;font-family:inherit;font-size:13px;font-weight:600;color:var(--ink-soft);padding:9px 0;border-radius:999px;cursor:pointer}
+.tab[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+.tab .cnt{font-family:var(--mono);opacity:.6;margin-left:4px;font-size:11px}
+
+.rail{padding:8px 14px 0;position:relative}
+.rail::before{content:"";position:absolute;left:38px;top:18px;bottom:18px;width:2px;background:linear-gradient(var(--line),rgba(203,213,225,0))}
+.monthmark{display:flex;align-items:center;gap:12px;margin:18px 0 8px}
+.monthmark span{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--ink-soft);background:var(--paper);padding:2px 6px;z-index:1;width:52px;text-align:center}
+.monthmark i{flex:1;height:1px;background:var(--line)}
+.row{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px}
+.dday{width:52px;flex:none;text-align:center;padding-top:14px;z-index:1}
+.dday b{display:block;font-family:var(--mono);font-size:13px;font-weight:700;background:var(--paper);padding:2px 0}
+.dday small{display:block;font-size:10px;color:var(--ink-soft);margin-top:1px}
+.dday.done b{color:var(--gain)}
+.card{flex:1;background:var(--surface);border-radius:14px;padding:14px;box-shadow:var(--shadow);border-left:4px solid var(--tier1)}
+.card.t2{border-left-color:var(--tier2)}
+.card-h{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.tagline{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
+.tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;background:#EEF2F7;color:var(--ink-soft)}
+.tag.t1{background:#E4EEF7;color:var(--tier1)}
+.tag.t2{background:#EEE8F8;color:var(--tier2)}
+.tag.free{background:#E1F3EC;color:var(--gain)}
+.pname{font-size:16px;font-weight:700;margin:0;line-height:1.3}
+.pmeta{font-size:12px;color:var(--ink-soft);margin:3px 0 0}
+.net{text-align:right;flex:none}
+.net b{display:block;font-family:var(--mono);font-size:17px;font-weight:700}
+.net small{font-size:10px;color:var(--ink-soft)}
+.detail{margin-top:11px;padding-top:11px;border-top:1px dashed var(--line);display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.detail div{font-size:11px;color:var(--ink-soft)}
+.detail b{display:block;font-family:var(--mono);font-size:13px;color:var(--ink);font-weight:600;margin-top:2px}
+.detail .neg b{color:var(--tax)}
+.detail .pos b{color:var(--gain)}
+.acts{display:flex;gap:8px;margin-top:11px}
+.acts button{flex:1;font-family:inherit;font-size:12px;font-weight:600;padding:7px 0;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink-soft);cursor:pointer}
+.acts .del{color:var(--tax);border-color:#F0CFD7}
+.empty{margin:24px 14px;padding:34px 20px;text-align:center;border:1px dashed var(--line);border-radius:16px;color:var(--ink-soft)}
+.empty b{display:block;color:var(--ink);font-size:16px;margin-bottom:6px}
+
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:30;padding:10px 14px calc(env(safe-area-inset-bottom) + 10px);background:linear-gradient(rgba(231,236,242,0),var(--paper) 32%);display:flex;gap:8px}
+.bar .add{flex:1;background:var(--ink);color:#fff;border:0;border-radius:12px;font-family:inherit;font-size:15px;font-weight:700;padding:14px 0;cursor:pointer}
+.bar .io{border:1px solid var(--line);background:#fff;border-radius:12px;font-family:inherit;font-size:12px;font-weight:600;color:var(--ink-soft);padding:0 14px;cursor:pointer}
+
+.scrim{position:fixed;inset:0;background:rgba(14,26,43,.45);z-index:40;opacity:0;pointer-events:none;transition:opacity .18s}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:50;background:var(--paper);border-radius:20px 20px 0 0;max-height:92vh;overflow-y:auto;transform:translateY(102%);transition:transform .26s cubic-bezier(.32,.72,0,1);padding:0 14px calc(env(safe-area-inset-bottom) + 20px)}
+.sheet.on{transform:translateY(0)}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:10px auto 4px}
+.sheet h2{font-size:18px;margin:6px 2px 14px}
+.field{margin-bottom:14px}
+.field>label{display:block;font-size:12px;font-weight:700;color:var(--ink-soft);margin-bottom:6px}
+.seg{display:flex;gap:6px}
+.seg button{flex:1;font-family:inherit;font-size:13px;font-weight:600;padding:11px 2px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink-soft);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+.seg.tier button[aria-pressed="true"][data-v="1"]{background:var(--tier1);border-color:var(--tier1)}
+.seg.tier button[aria-pressed="true"][data-v="2"]{background:var(--tier2);border-color:var(--tier2)}
+input[type=text],input[type=number],input[type=date],select{width:100%;font-family:inherit;font-size:16px;color:var(--ink);padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;-webkit-appearance:none;appearance:none}
+select{
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'><path d='M3 5l4 4 4-4' fill='none' stroke='%234A5A70' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:36px;font-weight:600;
+}
+input[type=date]{font-family:var(--mono)}
+input[type=number]{font-family:var(--mono);text-align:right}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--tier1);outline-offset:1px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.chip{font-family:inherit;font-size:12px;font-weight:600;color:var(--ink-soft);padding:7px 11px;border-radius:999px;border:1px solid var(--line);background:#fff;cursor:pointer}
+.chip:active{background:var(--ink);color:#fff}
+.hint{font-size:11px;color:var(--ink-soft);margin:6px 2px 0;line-height:1.45}
+
+.auto{border:1px solid var(--line);border-radius:14px;background:#fff;padding:13px;margin-bottom:14px}
+.auto-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+.auto-h b{font-size:12px;letter-spacing:.02em}
+.badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;background:#E1F3EC;color:var(--gain)}
+.badge.manual{background:#FBE9EE;color:var(--tax)}
+.auto .field:last-of-type{margin-bottom:0}
+
+.preview{background:var(--ink);color:#fff;border-radius:12px;padding:13px 14px;margin:4px 0 14px}
+.preview .pv-t{font-size:11px;color:#8FA3BC;margin:0 0 3px}
+.preview .pv-v{font-family:var(--mono);font-size:24px;font-weight:700;margin:0}
+.preview .pv-s{font-size:11px;color:#9DB0C7;margin:5px 0 0;font-family:var(--mono)}
+.err{color:var(--tax);font-size:12px;font-weight:600;margin:0 0 10px}
+.save{width:100%;background:var(--ink);color:#fff;border:0;border-radius:12px;font-family:inherit;font-size:16px;font-weight:700;padding:15px 0;cursor:pointer}
+.cancel{width:100%;background:transparent;border:0;color:var(--ink-soft);font-family:inherit;font-size:13px;padding:12px 0;margin-top:2px;cursor:pointer}
+.note{font-size:11px;color:var(--ink-soft);padding:4px 16px 0;line-height:1.6}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <p class="eyebrow">예금 · 적금 만기 정산</p>
+  <p class="total-label">세금 떼고 실제로 받는 총액</p>
+  <p class="total num"><span id="grandTotal">0</span><span class="won">원</span></p>
+  <dl class="breakdown">
+    <div class="bd"><dt>납입 원금</dt><dd class="num" id="sumPrincipal">0</dd></div>
+    <div class="bd gain"><dt>세전 이자</dt><dd class="num" id="sumInterest">0</dd></div>
+    <div class="bd tax"><dt>이자소득세</dt><dd class="num" id="sumTax">0</dd></div>
+    <div class="bd"><dt>세후 이자</dt><dd class="num" id="sumNetInt">0</dd></div>
+  </dl>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab" data-f="all" aria-pressed="true">전체<span class="cnt" id="cAll">0</span></button>
+  <button class="tab" data-f="1" aria-pressed="false">제1금융권<span class="cnt" id="c1">0</span></button>
+  <button class="tab" data-f="2" aria-pressed="false">제2금융권<span class="cnt" id="c2">0</span></button>
+</nav>
+
+<main class="rail" id="rail"></main>
+
+<div class="bar">
+  <button class="add" id="openAdd">+ 상품 추가</button>
+  <button class="io" id="exportBtn">내보내기</button>
+  <button class="io" id="importBtn">불러오기</button>
+  <input type="file" id="fileIn" accept="application/json" hidden>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<section class="sheet" id="sheet" aria-hidden="true">
+  <div class="grab"></div>
+  <h2 id="sheetTitle">상품 추가</h2>
+
+  <div class="field">
+    <label for="selBank">금융기관</label>
+    <select id="selBank"></select>
+    <input type="text" id="fBank" placeholder="금융기관 이름 직접 입력" style="margin-top:8px" hidden>
+  </div>
+
+  <div class="field">
+    <label for="selProd">상품명</label>
+    <select id="selProd"></select>
+    <input type="text" id="fName" placeholder="상품명 직접 입력" style="margin-top:8px" hidden>
+  </div>
+
+  <div class="field">
+    <label>가입일</label>
+    <input type="date" id="fStart">
+    <div class="chips">
+      <button class="chip" id="startToday">오늘</button>
+      <button class="chip" id="startFirst">이번 달 1일</button>
+    </div>
+  </div>
+
+  <div class="field">
+    <label>만기일</label>
+    <input type="date" id="fEnd">
+    <div class="chips" id="termChips">
+      <button class="chip" data-m="3">3개월</button>
+      <button class="chip" data-m="6">6개월</button>
+      <button class="chip" data-m="12">12개월</button>
+      <button class="chip" data-m="24">24개월</button>
+      <button class="chip" data-m="36">36개월</button>
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="fAmount" id="amountLabel">예치 원금 (원)</label>
+    <input type="number" id="fAmount" inputmode="numeric" placeholder="0">
+    <div class="chips" id="amtChips">
+      <button class="chip" data-a="1000000">+100만</button>
+      <button class="chip" data-a="5000000">+500만</button>
+      <button class="chip" data-a="10000000">+1,000만</button>
+      <button class="chip" data-a="50000000">+5,000만</button>
+      <button class="chip" data-a="0">지우기</button>
+    </div>
+  </div>
+
+  <div class="auto">
+    <div class="auto-h">
+      <b>기간에 맞춰 자동 입력된 조건</b>
+      <span class="badge" id="autoBadge">자동</span>
+    </div>
+
+    <div class="field">
+      <label>금융권 · 상품 종류</label>
+      <div class="seg tier" id="segTier">
+        <button data-v="1" aria-pressed="true">제1금융권</button>
+        <button data-v="2" aria-pressed="false">제2금융권</button>
+      </div>
+      <div class="seg" id="segKind" style="margin-top:6px">
+        <button data-v="deposit" aria-pressed="true">정기예금</button>
+        <button data-v="saving" aria-pressed="false">정기적금</button>
+        <button data-v="parking" aria-pressed="false">파킹·자유</button>
+      </div>
+    </div>
+
+    <div class="two field">
+      <div>
+        <label for="fRate">연이율 (%)</label>
+        <input type="number" id="fRate" step="0.01" inputmode="decimal" placeholder="0.00">
+      </div>
+      <div>
+        <label for="fComp">이자 방식</label>
+        <select id="fComp"><option value="simple">단리</option><option value="monthly">월복리</option></select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>과세 방식</label>
+      <div class="seg" id="segTax">
+        <button data-v="normal" aria-pressed="true">일반 15.4%</button>
+        <button data-v="pref" aria-pressed="false">세금우대 1.4%</button>
+        <button data-v="exempt" aria-pressed="false">비과세 0%</button>
+      </div>
+    </div>
+
+    <div class="chips">
+      <button class="chip" id="resetAuto">기준 조건 다시 적용</button>
+    </div>
+    <p class="hint" id="autoHint">금융기관과 상품을 고르면 기간별 기준금리·이자방식·과세가 자동으로 채워집니다. 실제 약정금리와 다르면 그대로 고쳐 쓰시면 되고, 고친 값은 그 상품의 기준으로 저장됩니다.</p>
+  </div>
+
+  <div class="preview">
+    <p class="pv-t">만기 실수령액</p>
+    <p class="pv-v" id="pvNet">0원</p>
+    <p class="pv-s" id="pvSub">금액과 기간을 입력하면 계산됩니다</p>
+  </div>
+
+  <p class="err" id="err" hidden></p>
+  <button class="save" id="saveBtn">저장</button>
+  <button class="cancel" id="cancelBtn">닫기</button>
+</section>
+
+<p class="note">
+  내장된 금리는 기간별 기준값(참고용)이며 실제 약정금리·우대금리는 가입 시점에 따라 다릅니다. 직접 수정한 금리는 해당 상품의 기준값으로 저장되어 다음에 자동으로 불러옵니다.
+  단리 예금은 실제 예치일수(365일 기준), 적금은 회차별 예치기간으로 계산하고, 이자소득세는 10원 미만 절사합니다.
+</p>
+
+<script>
+/* ═══ 상태 ═══ */
+var KEY='deposit_products_v1', CKEY='deposit_catalog_v1';
+var items=[], filter='all', editingId=null;
+var form={tier:'1',kind:'deposit',tax:'normal'};
+var rateTouched=false;
+var overrides={};   /* "은행|상품": {rate, comp, tax, kind, tier} */
+var customBanks=[]; /* {n, t, p:[[name,kind,adj]]} */
+
+/* ═══ 기준 금리표 (기간(개월) → 연 %) ═══ */
+var TPL={
+  deposit:{rates:{1:1.90,3:2.20,6:2.45,12:2.70,24:2.60,36:2.60},comp:'simple',term:12},
+  saving :{rates:{6:2.90,12:3.20,24:3.10,36:3.10},comp:'simple',term:12},
+  parking:{rates:{1:2.30},comp:'simple',term:12}
+};
+
+/* ═══ 금융기관 · 상품 카탈로그 ═══
+   [상품명, 종류, 금리가산(%p)]  ─ 은행 가산 + 상품 가산 = 최종 기준금리 */
+var BANKS=[
+ {n:'KB국민은행',t:'1',adj:0,p:[['KB Star 정기예금','deposit',0],['KB 특★한 적금','saving',0.3],['KB My핏 통장','parking',-0.3]]},
+ {n:'신한은행',t:'1',adj:0,p:[['쏠편한 정기예금','deposit',0.05],['신한 알.쏠 적금','saving',0.3],['신한 주거래 우대통장','parking',-0.3]]},
+ {n:'하나은행',t:'1',adj:0,p:[['하나의 정기예금','deposit',0.05],['달달 하나 적금','saving',0.35],['하나 파킹통장','parking',-0.2]]},
+ {n:'우리은행',t:'1',adj:0,p:[['WON플러스 예금','deposit',0.05],['우리 첫거래 적금','saving',0.35],['우리 SUPER 주거래통장','parking',-0.3]]},
+ {n:'NH농협은행',t:'1',adj:0,p:[['NH올원e예금','deposit',0],['NH직장인월복리적금','saving',0.25],['NH씬나는 주거래통장','parking',-0.3]]},
+ {n:'IBK기업은행',t:'1',adj:0.05,p:[['IBK D-DAY 적금','saving',0.3],['1석7조 통장','deposit',0.05],['IBK 파킹통장','parking',-0.2]]},
+ {n:'SC제일은행',t:'1',adj:0.05,p:[['e-그린세이브예금','deposit',0.1],['퍼스트 정기적금','saving',0.2]]},
+ {n:'부산은행',t:'1',adj:0.10,p:[['더(The) 특판 정기예금','deposit',0.15],['가맹점 우대적금','saving',0.3],['My SUM 파킹통장','parking',-0.1]]},
+ {n:'경남은행',t:'1',adj:0.10,p:[['BNK 정기예금','deposit',0.1],['BNK 위더스 적금','saving',0.3]]},
+ {n:'광주은행',t:'1',adj:0.10,p:[['호랏차차 디지털예금','deposit',0.15],['모아모아 적금','saving',0.3]]},
+ {n:'전북은행',t:'1',adj:0.10,p:[['JB 다이렉트예금통장','deposit',0.15],['JB 카드 재테크 적금','saving',0.3]]},
+ {n:'제주은행',t:'1',adj:0.10,p:[['J정기예금','deposit',0.1],['J-Plus 적금','saving',0.25]]},
+ {n:'카카오뱅크',t:'1',adj:0.20,p:[['카카오뱅크 정기예금','deposit',0.05],['카카오뱅크 자유적금','saving',0.2],['세이프박스','parking',-0.2]]},
+ {n:'케이뱅크',t:'1',adj:0.25,p:[['코드K 정기예금','deposit',0.1],['코드K 자유적금','saving',0.3],['플러스박스','parking',-0.1]]},
+ {n:'토스뱅크',t:'1',adj:0.25,p:[['토스뱅크 먼저 이자 받는 예금','deposit',0.1],['토스뱅크 자유적금','saving',0.3],['토스뱅크 통장(파킹)','parking',0]]},
+
+ {n:'우체국예금',t:'2',adj:0.05,p:[['e-Postbank 정기예금','deposit',0.1],['챔피언 정기예금','deposit',0.05],['시니어 싱글벙글 정기예금','deposit',0.1]]},
+ {n:'SBI저축은행',t:'2',adj:0.60,p:[['사이다뱅크 복리정기예금','deposit',0.1],['사이다뱅크 자유적금','saving',0.4],['사이다뱅크 입출금통장','parking',-0.2]]},
+ {n:'OK저축은행',t:'2',adj:0.60,p:[['OK e-정기예금','deposit',0.1],['OK 짠테크 적금','saving',0.5],['OK 읏백만통장','parking',-0.1]]},
+ {n:'웰컴저축은행',t:'2',adj:0.60,p:[['WELCOME 첫거래우대 e정기예금','deposit',0.15],['WELCOME 아이사랑 적금','saving',0.5],['welcome 보통예금','parking',-0.2]]},
+ {n:'페퍼저축은행',t:'2',adj:0.60,p:[['페퍼스 정기예금','deposit',0.1],['페퍼스 자유적금','saving',0.4],['페퍼스 파킹통장','parking',-0.1]]},
+ {n:'한국투자저축은행',t:'2',adj:0.55,p:[['킹코인 정기예금','deposit',0.1],['킹적금','saving',0.4]]},
+ {n:'BNK저축은행',t:'2',adj:0.55,p:[['정기예금','deposit',0.1],['BNK 스마트 적금','saving',0.4],['삼삼오오 파킹통장','parking',-0.1]]},
+ {n:'IBK저축은행',t:'2',adj:0.55,p:[['정기예금','deposit',0.1],['참!좋은 적금','saving',0.35]]},
+ {n:'동원제일저축은행',t:'2',adj:0.60,p:[['정기예금','deposit',0.1],['자유적금','saving',0.35]]},
+ {n:'신협',t:'2',adj:0.45,tax:'pref',p:[['조합원 정기예탁금','deposit',0.1],['정기적금','saving',0.35],['자유입출금 예탁금','parking',-0.2]]},
+ {n:'새마을금고',t:'2',adj:0.45,tax:'pref',p:[['정기예탁금','deposit',0.1],['정기적금','saving',0.35],['자유입출금 예탁금','parking',-0.2]]},
+ {n:'지역농협(단위조합)',t:'2',adj:0.40,tax:'pref',p:[['조합원 정기예탁금','deposit',0.1],['자유적금','saving',0.3]]},
+ {n:'수협(회원조합)',t:'2',adj:0.40,tax:'pref',p:[['조합원 정기예탁금','deposit',0.1],['자유적금','saving',0.3]]},
+ {n:'산림조합',t:'2',adj:0.40,tax:'pref',p:[['조합원 정기예탁금','deposit',0.1],['자유적금','saving',0.3]]}
+];
+
+/* ═══ 저장소 ═══ */
+async function load(){
+  try{
+    if(window.storage){
+      var a=await window.storage.get(KEY); if(a&&a.value) items=JSON.parse(a.value);
+    }
+  }catch(e){}
+  try{
+    if(window.storage){
+      var b=await window.storage.get(CKEY);
+      if(b&&b.value){ var c=JSON.parse(b.value); overrides=c.overrides||{}; customBanks=c.custom||[]; }
+    }
+  }catch(e){}
+  render();
+}
+async function save(){ try{ if(window.storage) await window.storage.set(KEY,JSON.stringify(items)); }catch(e){} }
+async function saveCatalog(){ try{ if(window.storage) await window.storage.set(CKEY,JSON.stringify({overrides:overrides,custom:customBanks})); }catch(e){} }
+
+/* ═══ 유틸 ═══ */
+function won(n){ return Math.round(n).toLocaleString('ko-KR'); }
+function d(s){ var p=s.split('-'); return new Date(+p[0],+p[1]-1,+p[2]); }
+function iso(dt){ return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); }
+function days(a,b){ return Math.round((d(b)-d(a))/86400000); }
+function months(a,b){
+  var s=d(a),e=d(b);
+  var m=(e.getFullYear()-s.getFullYear())*12+(e.getMonth()-s.getMonth());
+  if(e.getDate()<s.getDate()) m-=1;
+  return Math.max(m,0);
+}
+function addMonths(s,m){
+  var dt=d(s),day=dt.getDate();
+  dt.setDate(1); dt.setMonth(dt.getMonth()+m);
+  var last=new Date(dt.getFullYear(),dt.getMonth()+1,0).getDate();
+  dt.setDate(Math.min(day,last)); return iso(dt);
+}
+var TAXRATE={normal:0.154,pref:0.014,exempt:0};
+var TAXNAME={normal:'일반과세 15.4%',pref:'세금우대 1.4%',exempt:'비과세'};
+var KINDNAME={deposit:'정기예금',saving:'정기적금',parking:'파킹·자유'};
+
+function allBanks(){ return BANKS.concat(customBanks); }
+function findBank(n){ var r=allBanks().filter(function(b){return b.n===n;}); return r[0]||null; }
+function findProd(bank,name){ if(!bank) return null; var r=bank.p.filter(function(x){return x[0]===name;}); return r[0]||null; }
+function baseRate(kind,term,adj){
+  var tbl=TPL[kind].rates, keys=Object.keys(tbl).map(Number).sort(function(a,b){return a-b;});
+  var best=keys[0];
+  keys.forEach(function(k){ if(term>=k) best=k; });
+  return Math.round((tbl[best]+adj)*100)/100;
+}
+
+/* ═══ 계산 엔진 ═══ */
+function calc(it){
+  var dd=days(it.start,it.end), mm=months(it.start,it.end), r=it.rate/100, principal, interest;
+  if(it.kind==='saving'){
+    var n=Math.max(mm,1); principal=it.amount*n;
+    if(it.comp==='monthly'){ var i=r/12; interest=i>0? it.amount*((Math.pow(1+i,n+1)-(1+i))/i-n):0; }
+    else{ interest=it.amount*(r/12)*(n*(n+1)/2); }
+  }else{
+    principal=it.amount;
+    if(it.comp==='monthly'){ interest=principal*(Math.pow(1+r/12,(dd/365)*12)-1); }
+    else{ interest=principal*r*(dd/365); }
+  }
+  interest=Math.floor(interest);
+  var tax=Math.floor(interest*TAXRATE[it.tax]/10)*10;
+  var netInt=interest-tax, net=principal+netInt, yrs=dd/365;
+  var eff=(principal>0&&yrs>0)?(netInt/principal)/yrs*100:0;
+  return {dd:dd,mm:mm,principal:principal,interest:interest,tax:tax,netInt:netInt,net:net,eff:eff};
+}
+
+/* ═══ 목록 렌더 ═══ */
+function esc(s){ return String(s).replace(/[&<>"]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m];}); }
+function render(){
+  var list=items.slice().sort(function(a,b){ return a.end<b.end?-1:a.end>b.end?1:0; });
+  var shown=list.filter(function(it){ return filter==='all'||it.tier===filter; });
+  var t={principal:0,interest:0,tax:0,netInt:0,net:0};
+  shown.forEach(function(it){ var c=calc(it);
+    t.principal+=c.principal;t.interest+=c.interest;t.tax+=c.tax;t.netInt+=c.netInt;t.net+=c.net; });
+  document.getElementById('grandTotal').textContent=won(t.net);
+  document.getElementById('sumPrincipal').textContent=won(t.principal);
+  document.getElementById('sumInterest').textContent=won(t.interest);
+  document.getElementById('sumTax').textContent='-'+won(t.tax);
+  document.getElementById('sumNetInt').textContent=won(t.netInt);
+  document.getElementById('cAll').textContent=items.length;
+  document.getElementById('c1').textContent=items.filter(function(x){return x.tier==='1';}).length;
+  document.getElementById('c2').textContent=items.filter(function(x){return x.tier==='2';}).length;
+
+  var rail=document.getElementById('rail'); rail.innerHTML='';
+  if(!shown.length){
+    rail.innerHTML='<div class="empty"><b>등록된 상품이 없습니다</b>금융기관과 상품을 고르고 날짜만 선택하면 나머지는 자동으로 채워집니다.</div>';
+    return;
+  }
+  var today=iso(new Date()), curMonth='';
+  shown.forEach(function(it){
+    var c=calc(it), ym=it.end.slice(0,7);
+    if(ym!==curMonth){
+      curMonth=ym;
+      var mk=document.createElement('div'); mk.className='monthmark';
+      mk.innerHTML='<span>'+ym.replace('-','.')+'</span><i></i>'; rail.appendChild(mk);
+    }
+    var left=days(today,it.end);
+    var row=document.createElement('div'); row.className='row';
+    row.innerHTML=
+      '<div class="dday'+(left<=0?' done':'')+'"><b>'+(left>0?'D-'+left:left===0?'D-DAY':'만기')+'</b>'+
+      '<small>'+it.end.slice(5).replace('-','/')+'</small></div>'+
+      '<article class="card'+(it.tier==='2'?' t2':'')+'">'+
+        '<div class="card-h"><div><div class="tagline">'+
+          '<span class="tag t'+it.tier+'">제'+it.tier+'금융권</span>'+
+          '<span class="tag">'+KINDNAME[it.kind]+'</span>'+
+          '<span class="tag">'+(it.comp==='monthly'?'월복리':'단리')+' '+it.rate+'%</span>'+
+          (it.tax!=='normal'?'<span class="tag free">'+TAXNAME[it.tax]+'</span>':'')+
+        '</div>'+
+        '<p class="pname">'+esc(it.name||'이름 없는 상품')+'</p>'+
+        '<p class="pmeta">'+esc(it.bank||'-')+' · '+it.start.replace(/-/g,'.')+' → '+it.end.replace(/-/g,'.')+
+        ' ('+(c.mm>=12?Math.floor(c.mm/12)+'년 '+(c.mm%12?c.mm%12+'개월':''):c.mm+'개월')+')</p>'+
+        '</div><div class="net"><b>'+won(c.net)+'</b><small>세후 실수령</small></div></div>'+
+        '<div class="detail">'+
+          '<div>'+(it.kind==='saving'?'총 납입원금':'예치원금')+'<b>'+won(c.principal)+'</b></div>'+
+          '<div class="pos">세후 이자<b>+'+won(c.netInt)+'</b></div>'+
+          '<div class="neg">세금<b>-'+won(c.tax)+'</b></div>'+
+        '</div>'+
+        '<div class="acts"><button data-edit="'+it.id+'">수정</button>'+
+        '<button class="del" data-del="'+it.id+'">삭제</button></div>'+
+      '</article>';
+    rail.appendChild(row);
+  });
+}
+
+document.getElementById('rail').addEventListener('click',function(e){
+  var del=e.target.getAttribute('data-del'), ed=e.target.getAttribute('data-edit');
+  if(del&&confirm('이 상품을 삭제할까요?')){ items=items.filter(function(x){return x.id!==del;}); save(); render(); }
+  if(ed) openSheet(ed);
+});
+document.getElementById('tabs').addEventListener('click',function(e){
+  var b=e.target.closest('.tab'); if(!b) return;
+  filter=b.getAttribute('data-f');
+  [].forEach.call(this.querySelectorAll('.tab'),function(x){ x.setAttribute('aria-pressed',x===b?'true':'false'); });
+  render();
+});
+
+/* ═══ 드롭다운 채우기 ═══ */
+function fillBanks(sel){
+  var s=document.getElementById('selBank');
+  var g1='',g2='',gc='';
+  allBanks().forEach(function(b){
+    var o='<option value="'+esc(b.n)+'">'+esc(b.n)+'</option>';
+    if(b.custom) gc+=o; else if(b.t==='1') g1+=o; else g2+=o;
+  });
+  s.innerHTML='<option value="">— 금융기관 선택 —</option>'+
+    '<optgroup label="제1금융권">'+g1+'</optgroup>'+
+    '<optgroup label="제2금융권">'+g2+'</optgroup>'+
+    (gc?'<optgroup label="내가 추가한 곳">'+gc+'</optgroup>':'')+
+    '<option value="__custom__">직접 입력…</option>';
+  s.value = sel||'';
+}
+function fillProds(bankName,sel){
+  var s=document.getElementById('selProd'), b=findBank(bankName);
+  var opts='';
+  if(b){
+    var grp={deposit:'',saving:'',parking:''};
+    b.p.forEach(function(p){ grp[p[1]]+='<option value="'+esc(p[0])+'">'+esc(p[0])+'</option>'; });
+    ['deposit','saving','parking'].forEach(function(k){
+      if(grp[k]) opts+='<optgroup label="'+KINDNAME[k]+'">'+grp[k]+'</optgroup>';
+    });
+  }
+  s.innerHTML='<option value="">— 상품 선택 —</option>'+opts+'<option value="__custom__">직접 입력…</option>';
+  s.value = sel||'';
+}
+
+/* ═══ 자동 입력 ═══ */
+function ovKey(bank,prod){ return bank+'|'+prod; }
+function applyAuto(force){
+  var bankName=document.getElementById('selBank').value;
+  var prodName=document.getElementById('selProd').value;
+  if(bankName==='__custom__'||prodName==='__custom__'||!bankName||!prodName) { markAuto(); return; }
+  if(rateTouched&&!force){ markAuto(); return; }
+  var b=findBank(bankName), p=findProd(b,prodName);
+  if(!b||!p) { markAuto(); return; }
+  var start=document.getElementById('fStart').value, end=document.getElementById('fEnd').value;
+  var term=(start&&end&&days(start,end)>0)?months(start,end):TPL[p[1]].term;
+  if(term<1) term=1;
+
+  var ov=overrides[ovKey(bankName,prodName)]||{};
+  setSeg('segTier','tier',b.t);
+  setSeg('segKind','kind',p[1]);
+  setSeg('segTax','tax', ov.tax || b.tax || 'normal');
+  document.getElementById('fComp').value = ov.comp || TPL[p[1]].comp;
+  document.getElementById('fRate').value = (ov.rate!=null&&ov.term===term) ? ov.rate : baseRate(p[1],term,(b.adj||0)+p[2]);
+  kindChanged(); markAuto();
+}
+function markAuto(){
+  var badge=document.getElementById('autoBadge');
+  badge.textContent = rateTouched ? '직접 수정함' : '자동';
+  badge.className = 'badge' + (rateTouched?' manual':'');
+}
+document.getElementById('resetAuto').onclick=function(){ rateTouched=false; applyAuto(true); preview(); };
+
+/* ═══ 세그먼트 ═══ */
+function seg(id,key,after){
+  document.getElementById(id).addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b) return;
+    form[key]=b.getAttribute('data-v');
+    [].forEach.call(this.querySelectorAll('button'),function(x){ x.setAttribute('aria-pressed',x===b?'true':'false'); });
+    rateTouched=true; markAuto();
+    if(after) after();
+    preview();
+  });
+}
+function setSeg(id,key,v){
+  form[key]=v;
+  [].forEach.call(document.getElementById(id).querySelectorAll('button'),function(x){
+    x.setAttribute('aria-pressed',x.getAttribute('data-v')===v?'true':'false');
+  });
+}
+seg('segTier','tier'); seg('segTax','tax'); seg('segKind','kind',kindChanged);
+function kindChanged(){
+  document.getElementById('amountLabel').textContent = form.kind==='saving' ? '매월 납입액 (원)' : '예치 원금 (원)';
+}
+
+/* ═══ 드롭다운 이벤트 ═══ */
+document.getElementById('selBank').addEventListener('change',function(){
+  var v=this.value, custom=(v==='__custom__');
+  document.getElementById('fBank').hidden=!custom;
+  if(custom){ document.getElementById('fBank').focus(); fillProds(null); document.getElementById('selProd').value='__custom__'; }
+  else{ document.getElementById('fBank').value=''; fillProds(v); }
+  document.getElementById('fName').hidden = document.getElementById('selProd').value!=='__custom__';
+  rateTouched=false; applyAuto(true); preview();
+});
+document.getElementById('selProd').addEventListener('change',function(){
+  var custom=(this.value==='__custom__');
+  document.getElementById('fName').hidden=!custom;
+  if(custom) document.getElementById('fName').focus();
+  else document.getElementById('fName').value='';
+  rateTouched=false; applyAuto(true); preview();
+});
+
+/* ═══ 시트 ═══ */
+var sheet=document.getElementById('sheet'), scrim=document.getElementById('scrim');
+function openSheet(id){
+  editingId=id||null; rateTouched=false;
+  document.getElementById('sheetTitle').textContent=id?'상품 수정':'상품 추가';
+  document.getElementById('err').hidden=true;
+  if(id){
+    var it=items.find(function(x){return x.id===id;});
+    var known=findBank(it.bank);
+    fillBanks(known?it.bank:'__custom__');
+    document.getElementById('fBank').hidden=!!known;
+    document.getElementById('fBank').value=known?'':it.bank;
+    fillProds(known?it.bank:null, (known&&findProd(known,it.name))?it.name:'__custom__');
+    var pKnown=known&&findProd(known,it.name);
+    document.getElementById('fName').hidden=!!pKnown;
+    document.getElementById('fName').value=pKnown?'':it.name;
+    document.getElementById('fAmount').value=it.amount;
+    document.getElementById('fRate').value=it.rate;
+    document.getElementById('fComp').value=it.comp;
+    document.getElementById('fStart').value=it.start;
+    document.getElementById('fEnd').value=it.end;
+    setSeg('segTier','tier',it.tier); setSeg('segKind','kind',it.kind); setSeg('segTax','tax',it.tax);
+    rateTouched=true;
+  }else{
+    fillBanks(''); fillProds(null);
+    document.getElementById('fBank').hidden=true; document.getElementById('fName').hidden=true;
+    ['fBank','fName','fAmount','fRate'].forEach(function(k){ document.getElementById(k).value=''; });
+    document.getElementById('fComp').value='simple';
+    document.getElementById('fStart').value=iso(new Date());
+    document.getElementById('fEnd').value=addMonths(iso(new Date()),12);
+    setSeg('segTier','tier','1'); setSeg('segKind','kind','deposit'); setSeg('segTax','tax','normal');
+  }
+  kindChanged(); markAuto(); preview();
+  sheet.classList.add('on'); scrim.classList.add('on'); sheet.setAttribute('aria-hidden','false');
+}
+function closeSheet(){ sheet.classList.remove('on'); scrim.classList.remove('on'); sheet.setAttribute('aria-hidden','true'); }
+document.getElementById('openAdd').onclick=function(){ openSheet(null); };
+document.getElementById('cancelBtn').onclick=closeSheet;
+scrim.onclick=closeSheet;
+
+/* ═══ 폼 보조 ═══ */
+document.getElementById('amtChips').addEventListener('click',function(e){
+  var b=e.target.closest('.chip'); if(!b) return;
+  var a=+b.getAttribute('data-a'), f=document.getElementById('fAmount');
+  f.value = a===0?'':(+f.value||0)+a; preview();
+});
+document.getElementById('startToday').onclick=function(){
+  document.getElementById('fStart').value=iso(new Date()); applyAuto(); preview();
+};
+document.getElementById('startFirst').onclick=function(){
+  var n=new Date(); document.getElementById('fStart').value=iso(new Date(n.getFullYear(),n.getMonth(),1)); applyAuto(); preview();
+};
+document.getElementById('termChips').addEventListener('click',function(e){
+  var b=e.target.closest('.chip'); if(!b) return;
+  var s=document.getElementById('fStart').value||iso(new Date());
+  document.getElementById('fStart').value=s;
+  document.getElementById('fEnd').value=addMonths(s,+b.getAttribute('data-m'));
+  applyAuto(); preview();
+});
+['fStart','fEnd'].forEach(function(k){
+  document.getElementById(k).addEventListener('change',function(){ applyAuto(); preview(); });
+});
+document.getElementById('fRate').addEventListener('input',function(){ rateTouched=true; markAuto(); preview(); });
+document.getElementById('fComp').addEventListener('change',function(){ rateTouched=true; markAuto(); preview(); });
+document.getElementById('fAmount').addEventListener('input',preview);
+['fBank','fName'].forEach(function(k){ document.getElementById(k).addEventListener('input',preview); });
+
+function bankName(){
+  var v=document.getElementById('selBank').value;
+  return v==='__custom__'||!v ? document.getElementById('fBank').value.trim() : v;
+}
+function prodName(){
+  var v=document.getElementById('selProd').value;
+  return v==='__custom__'||!v ? document.getElementById('fName').value.trim() : v;
+}
+function readForm(){
+  return {
+    id: editingId||('p'+Date.now()),
+    tier:form.tier, kind:form.kind, tax:form.tax,
+    bank:bankName(), name:prodName(),
+    amount:+document.getElementById('fAmount').value||0,
+    rate:+document.getElementById('fRate').value||0,
+    comp:document.getElementById('fComp').value,
+    start:document.getElementById('fStart').value,
+    end:document.getElementById('fEnd').value
+  };
+}
+function preview(){
+  var it=readForm();
+  if(!it.start||!it.end||days(it.start,it.end)<=0||it.amount<=0){
+    document.getElementById('pvNet').textContent='0원';
+    document.getElementById('pvSub').textContent='금액과 기간을 입력하면 계산됩니다';
+    return;
+  }
+  var c=calc(it);
+  document.getElementById('pvNet').textContent=won(c.net)+'원';
+  document.getElementById('pvSub').textContent=
+    c.mm+'개월 · 원금 '+won(c.principal)+' · 이자 '+won(c.interest)+' · 세금 -'+won(c.tax)+' · 세후연 '+c.eff.toFixed(2)+'%';
+}
+
+document.getElementById('saveBtn').onclick=function(){
+  var it=readForm(), err=document.getElementById('err');
+  if(!it.bank||!it.name){ err.textContent='금융기관과 상품명을 선택하거나 입력해 주세요.'; err.hidden=false; return; }
+  if(!it.start||!it.end){ err.textContent='가입일과 만기일을 선택해 주세요.'; err.hidden=false; return; }
+  if(days(it.start,it.end)<=0){ err.textContent='만기일이 가입일보다 뒤여야 합니다.'; err.hidden=false; return; }
+  if(it.amount<=0){ err.textContent='금액을 입력해 주세요.'; err.hidden=false; return; }
+  err.hidden=true;
+
+  /* 직접 입력한 금융기관·상품은 카탈로그에 추가 */
+  var b=findBank(it.bank);
+  if(!b){
+    b={n:it.bank,t:it.tier,adj:0,custom:true,p:[]};
+    customBanks.push(b);
+  }
+  if(!findProd(b,it.name)) b.p.push([it.name,it.kind,0]);
+  /* 수정한 조건을 그 상품의 기준값으로 저장 */
+  overrides[ovKey(it.bank,it.name)]={rate:it.rate,comp:it.comp,tax:it.tax,term:months(it.start,it.end)};
+  saveCatalog();
+
+  if(editingId) items=items.map(function(x){ return x.id===editingId?it:x; });
+  else items.push(it);
+  save(); render(); closeSheet();
+};
+
+/* ═══ 내보내기 / 불러오기 ═══ */
+document.getElementById('exportBtn').onclick=function(){
+  var blob=new Blob([JSON.stringify({items:items,overrides:overrides,custom:customBanks},null,2)],{type:'application/json'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='예적금_'+iso(new Date())+'.json'; a.click();
+  URL.revokeObjectURL(a.href);
+};
+document.getElementById('importBtn').onclick=function(){ document.getElementById('fileIn').click(); };
+document.getElementById('fileIn').addEventListener('change',function(e){
+  var f=e.target.files[0]; if(!f) return;
+  var r=new FileReader();
+  r.onload=function(){
+    try{
+      var j=JSON.parse(r.result);
+      if(Array.isArray(j)) items=j;
+      else{ items=j.items||[]; overrides=j.overrides||{}; customBanks=j.custom||[]; }
+      save(); saveCatalog(); render();
+    }catch(err){ alert('파일을 읽을 수 없습니다. 내보내기로 저장한 JSON 파일인지 확인해 주세요.'); }
+  };
+  r.readAsText(f); e.target.value='';
+});
+
+fillBanks(''); fillProds(null);
+load();
+</script>
+</body>
+</html>
